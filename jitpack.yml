@@ -2,7 +2,3 @@ jdk:
   - openjdk21
 before_install:
   - sdk install java 21.0.3-zulu
-build:
-  tasks:
-    - :hikotest-sdk:assembleRelease
-    - :hikotest-sdk:publishReleasePublicationToMavenLocal
