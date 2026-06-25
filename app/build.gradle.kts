@@ -1,7 +1,13 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+val localProps = Properties()
+val localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) localProps.load(localPropsFile.inputStream())
 
 android {
     namespace = "com.hik.otest"
@@ -15,6 +21,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String",  "HIKOTEST_GITHUB_TOKEN", "\"${localProps.getProperty("hikotest.github.token", "")}\"")
+        buildConfigField("String",  "HIKOTEST_REPO_OWNER",   "\"${localProps.getProperty("hikotest.repo.owner", "")}\"")
+        buildConfigField("String",  "HIKOTEST_REPO_NAME",    "\"${localProps.getProperty("hikotest.repo.name", "")}\"")
+        buildConfigField("String",  "HIKOTEST_ENVIRONMENT",  "\"${localProps.getProperty("hikotest.environment", "production")}\"")
+        buildConfigField("boolean", "HIKOTEST_IS_BETA",      "${localProps.getProperty("hikotest.is.beta", "false")}")
     }
 
     buildTypes {
@@ -32,6 +44,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

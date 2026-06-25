@@ -8,11 +8,11 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 
-internal class WasmFetcher(context: Context) {
+internal class WasmFetcher(context: Context, private val config: HikotestConfig) {
 
     private val client = OkHttpClient()
     private val cacheDir = File(context.filesDir, "hikotest_cache").also { it.mkdirs() }
-    private val wasmFile = File(cacheDir, "release.wasm")
+    private val wasmFile = File(cacheDir, config.wasmAssetName)
     private val tagFile = File(cacheDir, "tag.txt")
 
     // Initial load: use cache if up-to-date, otherwise download.
@@ -56,20 +56,29 @@ internal class WasmFetcher(context: Context) {
     private data class ReleaseInfo(val tag: String, val assetId: Long)
 
     private fun fetchLatestRelease(): ReleaseInfo? {
+        val endpoint = if (config.isBeta) "releases" else "releases/latest"
         val request = Request.Builder()
-            .url("https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest")
-            .addHeader("Authorization", "Bearer $GITHUB_TOKEN")
+            .url("https://api.github.com/repos/${config.repoOwner}/${config.repoName}/$endpoint")
+            .addHeader("Authorization", "Bearer ${config.githubToken}")
             .addHeader("Accept", "application/vnd.github+json")
             .build()
 
         return client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return null
-            val json = JSONObject(response.body?.string() ?: return null)
+            val body = response.body?.string() ?: return null
+            val json = if (config.isBeta) {
+                // /releases returns an array; pick the first entry (most recent, including pre-releases)
+                val array = org.json.JSONArray(body)
+                if (array.length() == 0) return null
+                array.getJSONObject(0)
+            } else {
+                JSONObject(body)
+            }
             val tag = json.optString("tag_name").takeIf { it.isNotEmpty() } ?: return null
             val assets = json.optJSONArray("assets") ?: return null
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
-                if (asset.getString("name") == "release.wasm") {
+                if (asset.getString("name") == config.wasmAssetName) {
                     return ReleaseInfo(tag, asset.getLong("id"))
                 }
             }
@@ -79,20 +88,13 @@ internal class WasmFetcher(context: Context) {
 
     private fun downloadAsset(assetId: Long): ByteArray? {
         val request = Request.Builder()
-            .url("https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/assets/$assetId")
-            .addHeader("Authorization", "Bearer $GITHUB_TOKEN")
+            .url("https://api.github.com/repos/${config.repoOwner}/${config.repoName}/releases/assets/$assetId")
+            .addHeader("Authorization", "Bearer ${config.githubToken}")
             .addHeader("Accept", "application/octet-stream")
             .build()
 
         return client.newCall(request).execute().use { response ->
             if (response.isSuccessful) response.body?.bytes() else null
         }
-    }
-
-    companion object {
-        // TODO: Replace with token passed from outside or a secrets manager
-        private const val GITHUB_TOKEN = "ghp_YOUR_TOKEN_HERE"
-        private const val REPO_OWNER = "halil9393"
-        private const val REPO_NAME = "hikotest-raunt-project"
     }
 }

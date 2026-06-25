@@ -20,14 +20,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -45,30 +44,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private sealed class SdkState {
-    object Loading : SdkState()
-    object Ready : SdkState()
-    data class Error(val message: String) : SdkState()
-}
-
 @Composable
 private fun HikotestScreen() {
-    val context = LocalContext.current
-
-    var sdkState by remember { mutableStateOf<SdkState>(SdkState.Loading) }
+    val initState by Hikotest.initState.collectAsState()
     var inputA by remember { mutableStateOf("") }
     var inputB by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(Unit) {
-        sdkState = SdkState.Loading
-        sdkState = try {
-            Hikotest.initialize(context)
-            SdkState.Ready
-        } catch (e: Exception) {
-            SdkState.Error(e.message ?: "Bilinmeyen hata")
-        }
-    }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
@@ -87,8 +68,9 @@ private fun HikotestScreen() {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            when (val state = sdkState) {
-                SdkState.Loading -> {
+            when (val state = initState) {
+                is HikotestInitState.Idle,
+                is HikotestInitState.Loading -> {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -97,12 +79,12 @@ private fun HikotestScreen() {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                SdkState.Ready -> Text(
+                is HikotestInitState.Ready -> Text(
                     text = "SDK hazır",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
-                is SdkState.Error -> Text(
+                is HikotestInitState.Error -> Text(
                     text = "Hata: ${state.message}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
@@ -146,7 +128,7 @@ private fun HikotestScreen() {
                         }
                     }
                 },
-                enabled = sdkState == SdkState.Ready,
+                enabled = initState == HikotestInitState.Ready,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("getSumOf(A, B)")
