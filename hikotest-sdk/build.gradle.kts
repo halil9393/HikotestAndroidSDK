@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.hik.otest.sdk"
-    compileSdk = 37
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 29
