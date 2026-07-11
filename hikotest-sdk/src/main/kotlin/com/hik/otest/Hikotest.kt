@@ -87,6 +87,19 @@ object Hikotest {
         return runner.call("executeLogic", longArrayOf(a.toLong(), b.toLong()))[0].toInt()
     }
 
+    /**
+     * Signature-aware call. [signature] must match the function's signature as
+     * configured in the Hikotest panel (int/float/string/boolean). Strings travel
+     * through the Hikotest WASM ABI (UTF-8 over linear memory) transparently.
+     *
+     * Example for a (string, int) -> string function:
+     * `Hikotest.execute(HikoSignature(HikoType.STRING, HikoType.INT, HikoType.STRING), "ab", 3) as String`
+     */
+    fun execute(signature: HikoSignature, a: Any, b: Any): Any {
+        checkInitialized()
+        return runner.callTyped(signature, a, b)
+    }
+
     // --- Internal ---
 
     private fun startUpdateLoop(intervalMs: Long) {
