@@ -27,9 +27,19 @@ data class HikoSignature(val a: HikoType, val b: HikoType, val returns: HikoType
  */
 internal object WasmAbi {
 
-    fun call(instance: Instance, signature: HikoSignature, a: Any, b: Any): Any {
+    /** Bundle'da string imzalı fonksiyonun sarmalayıcı export adı. */
+    private fun wrapperName(functionName: String): String =
+        if (functionName == "executeLogic") "hiko_run" else "hiko_run_$functionName"
+
+    fun call(
+        instance: Instance,
+        functionName: String,
+        signature: HikoSignature,
+        a: Any,
+        b: Any,
+    ): Any {
         if (!signature.hasString) {
-            val raw = export(instance, "executeLogic")
+            val raw = export(instance, functionName)
                 .apply(toArg(signature.a, a), toArg(signature.b, b))[0]
             return fromResult(signature.returns, raw)
         }
@@ -49,7 +59,7 @@ internal object WasmAbi {
             }
         }
 
-        val raw = export(instance, "hiko_run").apply(*args.toLongArray())[0]
+        val raw = export(instance, wrapperName(functionName)).apply(*args.toLongArray())[0]
         if (signature.returns == HikoType.STRING) {
             val ptr = raw.toInt()
             val len = memory.readInt(ptr) // wasm memory is little-endian

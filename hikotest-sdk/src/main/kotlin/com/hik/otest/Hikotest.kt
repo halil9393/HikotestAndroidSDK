@@ -100,6 +100,17 @@ object Hikotest {
         return runner.callTyped(signature, a, b)
     }
 
+    /**
+     * Calls [functionName] in a multi-function bundle (each deployed function is
+     * exported under its own name in the live release.wasm).
+     *
+     * Example: `Hikotest.execute("checkCoupon", HikoSignature(HikoType.STRING, HikoType.INT, HikoType.BOOLEAN), "HIKO20", 250)`
+     */
+    fun execute(functionName: String, signature: HikoSignature, a: Any, b: Any): Any {
+        checkInitialized()
+        return runner.callTyped(signature, a, b, functionName)
+    }
+
     // --- Internal ---
 
     private fun startUpdateLoop(intervalMs: Long) {

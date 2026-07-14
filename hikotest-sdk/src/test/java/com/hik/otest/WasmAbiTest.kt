@@ -70,6 +70,29 @@ class WasmAbiTest {
     }
 
     @Test
+    fun `bundle exposes every function under its own name`() {
+        // bundle.wasm = 5 demo fonksiyonlu paket — canlı release.wasm ile aynı üretici
+        val runner = runnerFor("bundle.wasm")
+
+        val tax = HikoSignature(HikoType.INT, HikoType.INT, HikoType.INT)
+        assertEquals(118, runner.callTyped(tax, 100, 18, "calculateTax"))
+
+        val coupon = HikoSignature(HikoType.STRING, HikoType.INT, HikoType.BOOLEAN)
+        assertEquals(true, runner.callTyped(coupon, "HIKO20", 250, "checkCoupon"))
+        assertEquals(false, runner.callTyped(coupon, "HIKO20", 100, "checkCoupon"))
+
+        val shipping = HikoSignature(HikoType.INT, HikoType.BOOLEAN, HikoType.STRING)
+        assertEquals("EXPRESS", runner.callTyped(shipping, 5, true, "shippingLabel"))
+        assertEquals("PALLET", runner.callTyped(shipping, 40, false, "shippingLabel"))
+
+        val discount = HikoSignature(HikoType.FLOAT, HikoType.INT, HikoType.FLOAT)
+        assertEquals(800.0, runner.callTyped(discount, 1000.0, 3, "calculateDiscount") as Double, 1e-9)
+
+        val loyalty = HikoSignature(HikoType.INT, HikoType.BOOLEAN, HikoType.INT)
+        assertEquals(400, runner.callTyped(loyalty, 1000, true, "loyaltyPoints"))
+    }
+
+    @Test
     fun `missing wrapper export gives an actionable error`() {
         val runner = runnerFor("add.wasm") // no hiko_run in this module
         val sig = HikoSignature(HikoType.STRING, HikoType.INT, HikoType.STRING)

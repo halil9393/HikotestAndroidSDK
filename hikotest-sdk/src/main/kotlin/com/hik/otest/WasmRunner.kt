@@ -40,9 +40,16 @@ internal class WasmRunner {
     /**
      * Signature-aware call following the Hikotest WASM ABI (see [WasmAbi]):
      * strings travel through linear memory, numerics/booleans directly.
+     * [functionName] selects the export in a multi-function bundle; the default
+     * targets legacy single-function modules.
      */
-    fun callTyped(signature: HikoSignature, a: Any, b: Any): Any {
-        return WasmAbi.call(current(), signature, a, b)
+    fun callTyped(
+        signature: HikoSignature,
+        a: Any,
+        b: Any,
+        functionName: String = "executeLogic",
+    ): Any {
+        return WasmAbi.call(current(), functionName, signature, a, b)
     }
 
     val isLoaded: Boolean get() = instance != null
