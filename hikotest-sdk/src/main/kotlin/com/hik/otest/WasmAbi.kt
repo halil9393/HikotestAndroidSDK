@@ -6,12 +6,48 @@ import com.dylibso.chicory.runtime.Instance
 enum class HikoType { INT, FLOAT, STRING, BOOLEAN }
 
 /**
- * Signature of executeLogic: two parameters and a return type.
- * Must match the signature configured for the function in the Hikotest panel.
+ * Signature of a Hikotest function: 1..5 named parameters and a return type.
+ * Must match the signature configured for the function in the Hikotest panel
+ * (parameter NAMES live in the panel/manifest; calls are positional, so only
+ * the types matter here).
  */
-data class HikoSignature(val a: HikoType, val b: HikoType, val returns: HikoType) {
+data class HikoSignature(val params: List<HikoType>, val returns: HikoType) {
+
+    init {
+        require(params.size in 1..MAX_PARAMS) {
+            "HikoSignature supports 1..$MAX_PARAMS parameters, got ${params.size}"
+        }
+    }
+
+    /** Legacy two-parameter form, e.g. HikoSignature(INT, INT, INT). */
+    constructor(a: HikoType, b: HikoType, returns: HikoType) : this(listOf(a, b), returns)
+
     internal val hasString: Boolean
-        get() = a == HikoType.STRING || b == HikoType.STRING || returns == HikoType.STRING
+        get() = params.contains(HikoType.STRING) || returns == HikoType.STRING
+
+    companion object {
+        const val MAX_PARAMS = 5
+
+        /**
+         * Parses the compact signature token the panel embeds in generated
+         * wrappers (sdk/kotlin/HikotestFunctions.kt), e.g. "(float,string,boolean)->float".
+         */
+        fun parse(token: String): HikoSignature {
+            val match = requireNotNull(Regex("""^\(([a-z,]+)\)->([a-z]+)$""").matchEntire(token.trim())) {
+                "Invalid signature token: \"$token\" (expected e.g. \"(int,string)->boolean\")"
+            }
+            val (paramsPart, returnsPart) = match.destructured
+            return HikoSignature(paramsPart.split(',').map(::typeOf), typeOf(returnsPart))
+        }
+
+        private fun typeOf(name: String): HikoType = when (name.trim()) {
+            "int" -> HikoType.INT
+            "float" -> HikoType.FLOAT
+            "string" -> HikoType.STRING
+            "boolean" -> HikoType.BOOLEAN
+            else -> throw IllegalArgumentException("Unknown Hikotest type: \"$name\"")
+        }
+    }
 }
 
 /**
@@ -35,19 +71,22 @@ internal object WasmAbi {
         instance: Instance,
         functionName: String,
         signature: HikoSignature,
-        a: Any,
-        b: Any,
+        values: List<Any>,
     ): Any {
+        require(values.size == signature.params.size) {
+            "Expected ${signature.params.size} argument(s) for $functionName, got ${values.size}"
+        }
+
         if (!signature.hasString) {
             val raw = export(instance, functionName)
-                .apply(toArg(signature.a, a), toArg(signature.b, b))[0]
+                .apply(*LongArray(values.size) { i -> toArg(signature.params[i], values[i]) })[0]
             return fromResult(signature.returns, raw)
         }
 
         val memory = instance.memory()
         val alloc = export(instance, "hiko_alloc")
-        val args = ArrayList<Long>(4)
-        for ((type, value) in listOf(signature.a to a, signature.b to b)) {
+        val args = ArrayList<Long>(values.size * 2)
+        for ((type, value) in signature.params.zip(values)) {
             if (type == HikoType.STRING) {
                 val bytes = (value as? String ?: value.toString()).toByteArray(Charsets.UTF_8)
                 val ptr = alloc.apply(bytes.size.toLong())[0]

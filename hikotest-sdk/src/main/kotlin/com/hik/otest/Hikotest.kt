@@ -89,15 +89,16 @@ object Hikotest {
 
     /**
      * Signature-aware call. [signature] must match the function's signature as
-     * configured in the Hikotest panel (int/float/string/boolean). Strings travel
-     * through the Hikotest WASM ABI (UTF-8 over linear memory) transparently.
+     * configured in the Hikotest panel (int/float/string/boolean, 1..5 positional
+     * parameters). Strings travel through the Hikotest WASM ABI (UTF-8 over
+     * linear memory) transparently.
      *
      * Example for a (string, int) -> string function:
      * `Hikotest.execute(HikoSignature(HikoType.STRING, HikoType.INT, HikoType.STRING), "ab", 3) as String`
      */
-    fun execute(signature: HikoSignature, a: Any, b: Any): Any {
+    fun execute(signature: HikoSignature, vararg args: Any): Any {
         checkInitialized()
-        return runner.callTyped(signature, a, b)
+        return runner.callTyped(signature, args.toList())
     }
 
     /**
@@ -106,9 +107,20 @@ object Hikotest {
      *
      * Example: `Hikotest.execute("checkCoupon", HikoSignature(HikoType.STRING, HikoType.INT, HikoType.BOOLEAN), "HIKO20", 250)`
      */
-    fun execute(functionName: String, signature: HikoSignature, a: Any, b: Any): Any {
+    fun execute(functionName: String, signature: HikoSignature, vararg args: Any): Any {
         checkInitialized()
-        return runner.callTyped(signature, a, b, functionName)
+        return runner.callTyped(signature, args.toList(), functionName)
+    }
+
+    /**
+     * Token form used by the panel-generated wrappers (sdk/kotlin/HikotestFunctions.kt):
+     * [signature] is the compact type list, e.g. "(float,string,boolean)->float".
+     *
+     * Example: `Hikotest.execute("applyCampaign", "(float,string,boolean)->float", 1000.0, "VIP30", true) as Double`
+     */
+    fun execute(functionName: String, signature: String, vararg args: Any): Any {
+        checkInitialized()
+        return runner.callTyped(HikoSignature.parse(signature), args.toList(), functionName)
     }
 
     // --- Internal ---
