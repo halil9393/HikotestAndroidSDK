@@ -23,5 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "HikotestAndroidSDK"
-include(":app")
 include(":hikotest-sdk")
