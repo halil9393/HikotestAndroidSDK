@@ -54,6 +54,10 @@ internal class WasmRunner {
 
     val isLoaded: Boolean get() = instance != null
 
+    /** True when the loaded module exports [name] (bundles export each function under its own name). */
+    fun hasExport(name: String): Boolean =
+        runCatching { current().export(name) }.isSuccess
+
     private fun current(): Instance =
         requireNotNull(instance) { "call load() before invoking functions" }
 }

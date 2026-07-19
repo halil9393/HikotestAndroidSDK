@@ -62,4 +62,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     testImplementation(libs.junit)
+    // JVM unit testlerinde android.jar'ın org.json stub'ı çalışmaz — gerçek implementasyon.
+    testImplementation(libs.org.json)
 }

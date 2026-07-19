@@ -153,19 +153,52 @@ if (Hikotest.initState.value == HikotestInitState.Ready) {
 }
 ```
 
+### Hybrid mode — OTA lock (device-side guarantee)
+
+Some functions (payments, pricing, authorization) should **never** change
+over-the-air. Download a release you trust from the panel
+(`release.wasm` + `manifest.json`), ship it in your app's `assets/` and pass
+it at configure time:
+
+```kotlin
+Hikotest.configure(HikotestConfig.Builder()
+    .githubToken(token).repoOwner("acme").repoName("hikotest-build")
+    .localBundle(
+        assets.open("release.wasm").readBytes(),
+        assets.open("manifest.json").bufferedReader().readText(),
+    )
+    .lockedFunctions("applyPayment") // device-side lock list (optional)
+    .build())
+```
+
+- A function runs from the **embedded local bundle** when the live manifest
+  marks it `ota:false` (locked in the panel) or it is in your `lockedFunctions`
+  list. Everything else keeps hot-reloading from the live OTA bundle.
+- **The device wins.** The union is one-way: even if the panel unlocks a
+  function remotely, anything in `lockedFunctions` keeps running from the
+  embedded bundle until you ship an app update.
+- A locked function missing from the embedded bundle raises a clear error —
+  there is no silent OTA fallback.
+- **Fully offline mode:** configure only `localBundle` (no repo) and call
+  `Hikotest.initialize()` (no context needed) — the SDK never touches the network.
+- `Hikotest.isLocallyPinned(name)` tells you where calls are served from.
+
 ---
 
 ## Configuration reference
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `githubToken` | String | — | GitHub PAT. **Required.** |
-| `repoOwner` | String | — | GitHub username or org. **Required.** |
-| `repoName` | String | — | Repository name. **Required.** |
+| `githubToken` | String | — | GitHub PAT. **Required with a repo.** |
+| `repoOwner` | String | — | GitHub username or org. **Required with a repo.** |
+| `repoName` | String | — | Repository name. **Required with a repo.** |
 | `environment` | String | `"production"` | Arbitrary label forwarded to the WASM context. |
 | `isBeta` | Boolean | `false` | `true` fetches the latest release including pre-releases. |
 | `updateIntervalMs` | Long | `60000` | Background polling interval in ms (minimum 10 000). |
 | `wasmAssetName` | String | `"release.wasm"` | Asset filename to look for in GitHub Releases. |
+| `manifestAssetName` | String | `"manifest.json"` | Manifest asset filename (OTA lock flags come from here). |
+| `localBundle(bytes, manifestJson?)` | — | — | Embedded pinned release for hybrid/offline mode. |
+| `lockedFunctions(vararg names)` | — | empty | Device-side lock list; requires `localBundle`. |
 
 ---
 
