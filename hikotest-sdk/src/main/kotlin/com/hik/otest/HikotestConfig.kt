@@ -12,6 +12,8 @@ class HikotestConfig private constructor(
     val localWasmBytes: ByteArray?,
     val localManifestJson: String?,
     val lockedFunctions: Set<String>,
+    val verify: VerifyMode,
+    val integrityAssetName: String,
 ) {
 
     /** True when a GitHub repo is configured (OTA active); false = fully offline. */
@@ -29,6 +31,8 @@ class HikotestConfig private constructor(
         private var localWasmBytes: ByteArray? = null
         private var localManifestJson: String? = null
         private var lockedFunctions: Set<String> = emptySet()
+        private var verify: VerifyMode = VerifyMode.OFF
+        private var integrityAssetName: String = "integrity.json"
 
         fun githubToken(token: String) = apply { this.githubToken = token }
         fun repoOwner(owner: String) = apply { this.repoOwner = owner }
@@ -38,6 +42,18 @@ class HikotestConfig private constructor(
         fun updateIntervalMs(ms: Long) = apply { this.updateIntervalMs = ms }
         fun wasmAssetName(name: String) = apply { this.wasmAssetName = name }
         fun manifestAssetName(name: String) = apply { this.manifestAssetName = name }
+
+        /**
+         * Detached bundle-integrity check (docs/WASM_INTEGRITY.md §6). `OFF`
+         * (default) = today's behavior, no verification. `WARN` = verify when
+         * `integrity.json` is present, log on mismatch but still run; skip
+         * silently if absent. `ENFORCE` = reject the release if `integrity.json`
+         * is absent OR verification fails.
+         */
+        fun verify(mode: VerifyMode) = apply { this.verify = mode }
+
+        /** integrity.json asset name, as published by the panel's build workflow. */
+        fun integrityAssetName(name: String) = apply { this.integrityAssetName = name }
 
         /**
          * Embedded release for the hybrid/offline mode (OTA lock): ship the
@@ -84,6 +100,8 @@ class HikotestConfig private constructor(
                 localWasmBytes = localWasmBytes,
                 localManifestJson = localManifestJson,
                 lockedFunctions = lockedFunctions,
+                verify = verify,
+                integrityAssetName = integrityAssetName,
             )
         }
     }

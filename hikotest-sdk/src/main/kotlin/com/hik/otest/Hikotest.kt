@@ -116,6 +116,7 @@ object Hikotest {
                     fetcher = WasmFetcher(appContext, cfg)
                 }
                 val bundle = fetcher!!.getBundle()
+                verifyRelease(bundle, cfg.verify)
                 withContext(Dispatchers.Default) {
                     runner.load(bundle.wasmBytes)
                 }
@@ -212,6 +213,15 @@ object Hikotest {
         return pinnedRunner
     }
 
+    /** docs/WASM_INTEGRITY.md §6: off = skip; warn = log + run; enforce = throw. */
+    private fun verifyRelease(bundle: FetchedBundle, mode: VerifyMode) {
+        val manifestBytes = bundle.manifestJson?.toByteArray(Charsets.UTF_8)
+        val result = HikoIntegrity.evaluate(mode, bundle.integrityJson, bundle.wasmBytes, manifestBytes) ?: return
+        if (!result.ok) {
+            Log.w(TAG, "Hikotest integrity check failed: ${result.reason} (verify=warn → running anyway)")
+        }
+    }
+
     private fun startUpdateLoop(intervalMs: Long) {
         updateJob?.cancel()
         updateJob = scope.launch {
@@ -220,6 +230,7 @@ object Hikotest {
                 try {
                     val bundle = fetcher?.checkForUpdate()
                     if (bundle != null) {
+                        verifyRelease(bundle, config?.verify ?: VerifyMode.OFF)
                         withContext(Dispatchers.Default) {
                             runner.load(bundle.wasmBytes)
                         }
