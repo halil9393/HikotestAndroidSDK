@@ -1,6 +1,8 @@
 package com.hik.otest
 
 class HikotestConfig private constructor(
+    val panelBaseUrl: String,
+    val projectId: String,
     val githubToken: String,
     val repoOwner: String,
     val repoName: String,
@@ -16,10 +18,21 @@ class HikotestConfig private constructor(
     val integrityAssetName: String,
 ) {
 
-    /** True when a GitHub repo is configured (OTA active); false = fully offline. */
-    val hasRemote: Boolean get() = repoOwner.isNotBlank()
+    /** True when the panel edge OTA is configured (preferred over direct GitHub). */
+    val hasPanel: Boolean get() = panelBaseUrl.isNotBlank()
+
+    /**
+     * True when an OTA source (panel or GitHub repo) is configured; false = fully
+     * offline (localBundle only). The panel edge path is preferred (docs
+     * WASM_INTEGRITY.md §4.13): devices poll the panel's edge-cached
+     * `/api/ota/:projectId/latest` instead of hammering GitHub's 5 000/h rate
+     * limit, and no token ships to the client.
+     */
+    val hasRemote: Boolean get() = panelBaseUrl.isNotBlank() || repoOwner.isNotBlank()
 
     class Builder {
+        private var panelBaseUrl: String = ""
+        private var projectId: String = ""
         private var githubToken: String = ""
         private var repoOwner: String = ""
         private var repoName: String = ""
@@ -34,8 +47,31 @@ class HikotestConfig private constructor(
         private var verify: VerifyMode = VerifyMode.OFF
         private var integrityAssetName: String = "integrity.json"
 
+        /**
+         * Panel OTA base URL, e.g. "https://hikotest.app" (origin only, no trailing
+         * path). PREFERRED over [repoOwner]/[repoName]/[githubToken]: devices poll the
+         * panel's edge-cached `/api/ota/:projectId/latest` instead of
+         * `api.github.com/releases/latest` (docs WASM_INTEGRITY.md §4.13). N devices no
+         * longer burn GitHub's 5 000/h rate limit (the edge caches per project, not per
+         * device) and NO token ships to the client — the panel proxies release assets
+         * server-side. Requires [projectId].
+         */
+        fun panelBaseUrl(url: String) = apply { this.panelBaseUrl = url }
+
+        /**
+         * Hikotest project UUID (the panel's `projects.id`). Required with [panelBaseUrl].
+         * This is the panel's device-facing identifier; it is not derivable from a repo
+         * name, so a device moving onto the panel path must be configured with it.
+         */
+        fun projectId(id: String) = apply { this.projectId = id }
+
+        @Deprecated("Prefer panelBaseUrl + projectId (no token on the client, edge-cached).")
         fun githubToken(token: String) = apply { this.githubToken = token }
+
+        @Deprecated("Prefer panelBaseUrl + projectId (the panel proxies GitHub server-side).")
         fun repoOwner(owner: String) = apply { this.repoOwner = owner }
+
+        @Deprecated("Prefer panelBaseUrl + projectId (the panel proxies GitHub server-side).")
         fun repoName(name: String) = apply { this.repoName = name }
         fun environment(env: String) = apply { this.environment = env }
         fun isBeta(beta: Boolean) = apply { this.isBeta = beta }
@@ -74,14 +110,23 @@ class HikotestConfig private constructor(
         fun lockedFunctions(vararg names: String) = apply { this.lockedFunctions = names.toSet() }
 
         fun build(): HikotestConfig {
+            val hasPanel = panelBaseUrl.isNotBlank() || projectId.isNotBlank()
             val hasRepo = repoOwner.isNotBlank() || repoName.isNotBlank() || githubToken.isNotBlank()
+            if (hasPanel) {
+                require(panelBaseUrl.isNotBlank()) { "HikotestConfig: panelBaseUrl must not be empty" }
+                require(projectId.isNotBlank()) { "HikotestConfig: projectId must not be empty" }
+            }
             if (hasRepo) {
                 require(githubToken.isNotBlank()) { "HikotestConfig: githubToken must not be empty" }
                 require(repoOwner.isNotBlank()) { "HikotestConfig: repoOwner must not be empty" }
                 require(repoName.isNotBlank()) { "HikotestConfig: repoName must not be empty" }
-            } else {
+            }
+            require(!(hasPanel && hasRepo)) {
+                "HikotestConfig: set EITHER panelBaseUrl/projectId (panel OTA, preferred) OR repoOwner/repoName (legacy GitHub), not both"
+            }
+            if (!hasPanel && !hasRepo) {
                 require(localWasmBytes != null) {
-                    "HikotestConfig: configure a repo (OTA), localBundle (offline), or both (hybrid)"
+                    "HikotestConfig: configure panelBaseUrl/projectId (OTA), a repo (legacy OTA), localBundle (offline), or both (hybrid)"
                 }
             }
             require(lockedFunctions.isEmpty() || localWasmBytes != null) {
@@ -89,6 +134,9 @@ class HikotestConfig private constructor(
             }
             require(updateIntervalMs >= 10_000L) { "HikotestConfig: updateIntervalMs must be at least 10 000 ms" }
             return HikotestConfig(
+                // Trailing slash normalized away so `${panelBaseUrl}/api/ota/...` stays single-slash.
+                panelBaseUrl = panelBaseUrl.trimEnd('/'),
+                projectId = projectId,
                 githubToken = githubToken,
                 repoOwner = repoOwner,
                 repoName = repoName,

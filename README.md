@@ -1,6 +1,6 @@
 # Hikotest Android SDK
 
-An Android SDK that fetches and runs **WebAssembly (WASM) business logic dynamically** — no app update required. The runtime is powered by [Chicory](https://github.com/dylibso/chicory) (pure-JVM, no JNI). The SDK pulls `release.wasm` from a GitHub Release, caches it locally, and hot-reloads automatically in the background.
+An Android SDK that fetches and runs **WebAssembly (WASM) business logic dynamically** — no app update required. The runtime is powered by [Chicory](https://github.com/dylibso/chicory) (pure-JVM, no JNI). The SDK pulls `release.wasm` from the Hikotest panel's edge-cached OTA endpoint (or directly from a GitHub Release on the legacy path), caches it locally, and hot-reloads automatically in the background.
 
 ---
 
@@ -96,11 +96,12 @@ class AppDelegate : Application() {
 
         Hikotest.configure(
             HikotestConfig.Builder()
-                .githubToken(BuildConfig.HIKOTEST_GITHUB_TOKEN)
-                .repoOwner(BuildConfig.HIKOTEST_REPO_OWNER)
-                .repoName(BuildConfig.HIKOTEST_REPO_NAME)
+                // Preferred: poll the panel's edge-cached OTA endpoint. No GitHub
+                // token ships in the app, and N devices share one edge cache instead
+                // of each hitting GitHub's 5 000/h rate limit.
+                .panelBaseUrl(BuildConfig.HIKOTEST_PANEL_BASE_URL) // e.g. "https://hikotest.app"
+                .projectId(BuildConfig.HIKOTEST_PROJECT_ID)         // panel projects.id (UUID)
                 .environment(BuildConfig.HIKOTEST_ENVIRONMENT)
-                .isBeta(BuildConfig.HIKOTEST_IS_BETA)
                 .build()
         )
 
@@ -187,11 +188,15 @@ Hikotest.configure(HikotestConfig.Builder()
 
 ## Configuration reference
 
+Configure **either** the panel path (preferred) **or** the legacy GitHub path — not both.
+
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `githubToken` | String | — | GitHub PAT. **Required with a repo.** |
-| `repoOwner` | String | — | GitHub username or org. **Required with a repo.** |
-| `repoName` | String | — | Repository name. **Required with a repo.** |
+| `panelBaseUrl` | String | — | **Preferred.** Panel origin (e.g. `https://hikotest.app`). Devices poll the edge-cached `/api/ota/:projectId/latest`; no token on the client. **Required with `projectId`.** |
+| `projectId` | String | — | Panel `projects.id` (UUID). **Required with `panelBaseUrl`.** |
+| `githubToken` | String | — | *Deprecated (legacy GitHub path).* GitHub PAT. Required with a repo. |
+| `repoOwner` | String | — | *Deprecated.* GitHub username or org. Required with a repo. |
+| `repoName` | String | — | *Deprecated.* Repository name. Required with a repo. |
 | `environment` | String | `"production"` | Arbitrary label forwarded to the WASM context. |
 | `isBeta` | Boolean | `false` | `true` fetches the latest release including pre-releases. |
 | `updateIntervalMs` | Long | `60000` | Background polling interval in ms (minimum 10 000). |
@@ -210,7 +215,7 @@ App start
        ├─ Hikotest.configure(config)   ← sets credentials & options
        └─ Hikotest.initialize(context) ← downloads WASM, loads runtime
             └─ background loop (every updateIntervalMs)
-                 └─ checks GitHub for a new release tag
+                 └─ checks the panel's edge OTA endpoint (or GitHub, legacy) for a new tag
                       └─ hot-reloads WASM if tag changed (no app restart needed)
 ```
 
